@@ -142,8 +142,7 @@ void compute_mandelbrot(){
             z_y_squared = 0.0;
 
             for(iteration = 0;
-                iteration < iteration_max && \
-                ((z_x_squared + z_y_squared) < escape_radius_squared);
+                iteration < iteration_max && ((z_x_squared + z_y_squared) < escape_radius_squared);
                 iteration++){
                 z_y         = 2 * z_x * z_y + c_y;
                 z_x         = z_x_squared - z_y_squared + c_x;
