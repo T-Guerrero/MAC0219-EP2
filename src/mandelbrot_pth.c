@@ -3,7 +3,7 @@
 #include <math.h>
 #include <pthread.h>
 
-int THREADS = 1;
+#define THREADS 3
 
 double c_x_min;
 double c_x_max;
@@ -182,14 +182,18 @@ void compute_mandelbrot(){
         if (i == THREADS - 1)
             args[i].i_y_thread_max = i_y_max;
         else
-            args[i].i_y_thread_max = size;
+            args[i].i_y_thread_max = i_y;
 
         error = pthread_create(&tids[i], NULL, worker, &args[i]);
         if (error)
             printf(">> Error creating thread\n");
     }
 
-    pthread_exit(NULL);
+    for (int i = 0; i < THREADS; i++) {
+        error = pthread_join(tids[i], NULL);
+        if (error)
+            printf(">> Error joining\n");
+    }
 };
 
 int main(int argc, char *argv[]){
