@@ -1,6 +1,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
+#include <pthread.h>
+
+int THREADS = 1;
 
 double c_x_min;
 double c_x_max;
@@ -39,6 +42,12 @@ int colors[17][3] = {
                         {106, 52, 3},
                         {16, 16, 16},
                     };
+
+typedef struct {
+    int i_y_thread;
+    int i_y_thread_max;
+} ThreadData;
+
 
 void allocate_image_buffer(){
     int rgb_size = 3;
@@ -111,21 +120,23 @@ void write_to_file(){
     fclose(file);
 };
 
-void compute_mandelbrot(){
+void * worker(void *argument) {
+    ThreadData arg = *(ThreadData *)argument;
+    int i_y = arg.i_y_thread;
+    int max = arg.i_y_thread_max;
     double z_x;
     double z_y;
     double z_x_squared;
     double z_y_squared;
     double escape_radius_squared = 4;
 
-    int iteration;
     int i_x;
-    int i_y;
 
+    int iteration;
     double c_x;
     double c_y;
 
-    for(i_y = 0; i_y < i_y_max; i_y++){
+    for (; i_y < max; i_y++) {
         c_y = c_y_min + i_y * pixel_height;
 
         if(fabs(c_y) < pixel_height / 2){
@@ -155,6 +166,30 @@ void compute_mandelbrot(){
             update_rgb_buffer(iteration, i_x, i_y);
         };
     };
+    pthread_exit(NULL);
+}
+
+void compute_mandelbrot(){
+    pthread_t *tids = malloc(sizeof(pthread_t) * THREADS);
+    ThreadData *args = malloc(sizeof(ThreadData) * THREADS);
+    int error;
+    int size = i_y_max/THREADS;
+    int i_y = 0;
+    for (int i = 0; i < THREADS; i++) {
+        args[i].i_y_thread = i_y;
+        i_y += size;
+
+        if (i == THREADS - 1)
+            args[i].i_y_thread_max = i_y_max;
+        else
+            args[i].i_y_thread_max = size;
+
+        error = pthread_create(&tids[i], NULL, worker, &args[i]);
+        if (error)
+            printf(">> Error creating thread\n");
+    }
+
+    pthread_exit(NULL);
 };
 
 int main(int argc, char *argv[]){
