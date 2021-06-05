@@ -1,0 +1,8 @@
+.ipynb_checkpoints
+
+*.swp
+*.bbl
+*.blg
+*.log
+*.aux
+*.spl
