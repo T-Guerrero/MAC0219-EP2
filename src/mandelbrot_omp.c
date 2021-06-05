@@ -3,7 +3,7 @@
 #include <math.h>
 #include <omp.h>
 
-#define THREADS 12
+#define THREADS 2
 
 double c_x_min;
 double c_x_max;
@@ -115,54 +115,53 @@ void write_to_file(){
 };
 
 void compute_mandelbrot(){
-    int size = c_y_max/THREADS;
     omp_set_num_threads(THREADS);
-    #pragma parallel for schedule(static, size)
-    {
-        double z_x;
-        double z_y;
-        double z_x_squared;
-        double z_y_squared;
-        double escape_radius_squared = 4;
+    int size = i_y_max/THREADS;
+    double z_x;
+    double z_y;
+    double z_x_squared;
+    double z_y_squared;
+    double escape_radius_squared = 4;
 
-        int iteration;
-        int i_x;
-        int i_y;
+    int iteration;
+    int i_x;
+    int i_y;
 
-        double c_x;
-        double c_y;
-        for(i_y = 0; i_y < i_y_max; i_y++){
-            c_y = c_y_min + i_y * pixel_height;
+    double c_x;
+    double c_y;
+    #pragma omp parallel for default(shared) \
+    private(z_x, z_y, z_x_squared, z_y_squared, iteration, i_x, i_y, c_x, c_y) \
+    schedule(static, size)
+    for(i_y = 0; i_y < i_y_max; i_y++){
+        c_y = c_y_min + i_y * pixel_height;
 
-            if(fabs(c_y) < pixel_height / 2){
-                c_y = 0.0;
-            };
-
-            for(i_x = 0; i_x < i_x_max; i_x++){
-                c_x         = c_x_min + i_x * pixel_width;
-
-                z_x         = 0.0;
-                z_y         = 0.0;
-
-                z_x_squared = 0.0;
-                z_y_squared = 0.0;
-
-                for(iteration = 0;
-                    iteration < iteration_max && \
-                    ((z_x_squared + z_y_squared) < escape_radius_squared);
-                    iteration++){
-                    z_y         = 2 * z_x * z_y + c_y;
-                    z_x         = z_x_squared - z_y_squared + c_x;
-
-                    z_x_squared = z_x * z_x;
-                    z_y_squared = z_y * z_y;
-                };
-
-                update_rgb_buffer(iteration, i_x, i_y);
-            };
+        if(fabs(c_y) < pixel_height / 2){
+            c_y = 0.0;
         };
-    }
 
+        for(i_x = 0; i_x < i_x_max; i_x++){
+            c_x         = c_x_min + i_x * pixel_width;
+
+            z_x         = 0.0;
+            z_y         = 0.0;
+
+            z_x_squared = 0.0;
+            z_y_squared = 0.0;
+
+            for(iteration = 0;
+                iteration < iteration_max && \
+                ((z_x_squared + z_y_squared) < escape_radius_squared);
+                iteration++){
+                z_y         = 2 * z_x * z_y + c_y;
+                z_x         = z_x_squared - z_y_squared + c_x;
+
+                z_x_squared = z_x * z_x;
+                z_y_squared = z_y * z_y;
+            };
+
+            update_rgb_buffer(iteration, i_x, i_y);
+        };
+    };
 };
 
 int main(int argc, char *argv[]){
