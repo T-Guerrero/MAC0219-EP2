@@ -1,10 +1,12 @@
+#define _POSIX_C_SOURCE 199309L
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
 #include <pthread.h>
+#include <time.h>
 
-#define THREADS 3
-
+int threads;
 double c_x_min;
 double c_x_max;
 double c_y_min;
@@ -48,6 +50,11 @@ typedef struct {
     int i_y_thread_max;
 } ThreadData;
 
+static double rtclock() {
+  struct timespec t;
+  clock_gettime(CLOCK_REALTIME, &t);
+  return t.tv_sec + t.tv_nsec * 1e-9;
+}
 
 void allocate_image_buffer(){
     int rgb_size = 3;
@@ -58,14 +65,21 @@ void allocate_image_buffer(){
     };
 };
 
+void free_image_buffer() {
+    for (int i  = 0; i < image_buffer_size; i++) {
+        free(image_buffer[i]);
+    }
+    free(image_buffer);
+}
+
 void init(int argc, char *argv[]){
-    if(argc < 6){
-        printf("usage: ./mandelbrot_pth c_x_min c_x_max c_y_min c_y_max image_size\n");
+    if(argc < 7){
+        printf("usage: ./mandelbrot_pth c_x_min c_x_max c_y_min c_y_max image_size num_threads\n");
         printf("examples with image_size = 11500:\n");
-        printf("    Full Picture:         ./mandelbrot_pth -2.5 1.5 -2.0 2.0 11500\n");
-        printf("    Seahorse Valley:      ./mandelbrot_pth -0.8 -0.7 0.05 0.15 11500\n");
-        printf("    Elephant Valley:      ./mandelbrot_pth 0.175 0.375 -0.1 0.1 11500\n");
-        printf("    Triple Spiral Valley: ./mandelbrot_pth -0.188 -0.012 0.554 0.754 11500\n");
+        printf("    Full Picture:         ./mandelbrot_pth -2.5 1.5 -2.0 2.0 11500 4\n");
+        printf("    Seahorse Valley:      ./mandelbrot_pth -0.8 -0.7 0.05 0.15 11500 4\n");
+        printf("    Elephant Valley:      ./mandelbrot_pth 0.175 0.375 -0.1 0.1 11500 4\n");
+        printf("    Triple Spiral Valley: ./mandelbrot_pth -0.188 -0.012 0.554 0.754 11500 4\n");
         exit(0);
     }
     else{
@@ -74,6 +88,7 @@ void init(int argc, char *argv[]){
         sscanf(argv[3], "%lf", &c_y_min);
         sscanf(argv[4], "%lf", &c_y_max);
         sscanf(argv[5], "%d", &image_size);
+        sscanf(argv[6], "%d", &threads);
 
         i_x_max           = image_size;
         i_y_max           = image_size;
@@ -170,16 +185,16 @@ void * worker(void *argument) {
 }
 
 void compute_mandelbrot(){
-    pthread_t *tids = malloc(sizeof(pthread_t) * THREADS);
-    ThreadData *args = malloc(sizeof(ThreadData) * THREADS);
+    pthread_t *tids = malloc(sizeof(pthread_t) * threads);
+    ThreadData *args = malloc(sizeof(ThreadData) * threads);
     int error;
-    int size = i_y_max/THREADS;
+    int size = i_y_max/threads;
     int i_y = 0;
-    for (int i = 0; i < THREADS; i++) {
+    for (int i = 0; i < threads; i++) {
         args[i].i_y_thread = i_y;
         i_y += size;
 
-        if (i == THREADS - 1)
+        if (i == threads - 1)
             args[i].i_y_thread_max = i_y_max;
         else
             args[i].i_y_thread_max = i_y;
@@ -189,14 +204,18 @@ void compute_mandelbrot(){
             printf(">> Error creating thread\n");
     }
 
-    for (int i = 0; i < THREADS; i++) {
+    for (int i = 0; i < threads; i++) {
         error = pthread_join(tids[i], NULL);
         if (error)
             printf(">> Error joining\n");
     }
+
+    free(tids);
+    free(args);
 };
 
 int main(int argc, char *argv[]){
+    double a = rtclock();
     init(argc, argv);
 
     allocate_image_buffer();
@@ -204,6 +223,8 @@ int main(int argc, char *argv[]){
     compute_mandelbrot();
 
     write_to_file();
-
+    free_image_buffer();
+    double b = rtclock();
+    printf("%s,%d,%d,%lf,0", "pth", image_size, threads, 1e3*(b-a));
     return 0;
 };

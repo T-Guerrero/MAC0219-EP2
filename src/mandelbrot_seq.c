@@ -1,6 +1,9 @@
+#define _POSIX_C_SOURCE 199309L
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
+#include <time.h>
 
 double c_x_min;
 double c_x_max;
@@ -40,6 +43,12 @@ int colors[17][3] = {
                         {16, 16, 16},
                     };
 
+static double rtclock() {
+  struct timespec t;
+  clock_gettime(CLOCK_REALTIME, &t);
+  return t.tv_sec + t.tv_nsec * 1e-9;
+}
+
 void allocate_image_buffer(){
     int rgb_size = 3;
     image_buffer = (unsigned char **) malloc(sizeof(unsigned char *) * image_buffer_size);
@@ -48,6 +57,13 @@ void allocate_image_buffer(){
         image_buffer[i] = (unsigned char *) malloc(sizeof(unsigned char) * rgb_size);
     };
 };
+
+void free_image_buffer() {
+    for (int i  = 0; i < image_buffer_size; i++) {
+        free(image_buffer[i]);
+    }
+    free(image_buffer);
+}
 
 void init(int argc, char *argv[]){
     if(argc < 6){
@@ -157,13 +173,22 @@ void compute_mandelbrot(){
 };
 
 int main(int argc, char *argv[]){
-    init(argc, argv);
+    double a = rtclock();
 
+    init(argc, argv);
     allocate_image_buffer();
+
+    double b = rtclock();
 
     compute_mandelbrot();
 
-    write_to_file();
+    double c = rtclock();
 
+    write_to_file();
+    free_image_buffer();
+
+    double d = rtclock();
+
+    printf("%s,%d,%d,%lf,%lf", "seq", image_size, 1, 1e3*(c-b), 1e3*((b-a) + (d-c)));
     return 0;
 };
