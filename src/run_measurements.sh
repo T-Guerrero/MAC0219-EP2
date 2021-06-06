@@ -17,7 +17,7 @@ NAMES=('mandelbrot_seq' 'mandelbrot_pth' 'mandelbrot_omp')
 
 make
 mkdir -p ../measurements
-echo "tipo,tamanho,threads,tempo,I/O,figura" > ../measurements/data.csv
+echo "tipo,tamanho,threads,tempo,io,figura" > ../measurements/data.csv
 
 for NAME in ${NAMES[@]}; do
 
