@@ -181,16 +181,16 @@ void compute_mandelbrot(){
 };
 
 int main(int argc, char *argv[]){
-    double a = rtclock();
     init(argc, argv);
 
     allocate_image_buffer();
 
+    double a = rtclock();
     compute_mandelbrot();
+    double b = rtclock();
 
     write_to_file();
     free_image_buffer();
-    double b = rtclock();
     printf("%s,%d,%d,%lf,0", "omp", image_size, threads, 1e3*(b-a));
     return 0;
 };
