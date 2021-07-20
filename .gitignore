@@ -4,6 +4,9 @@
 mandelbrot_seq
 mandelbrot_pth
 mandelbrot_omp
+mandelbrot_mpi
+mandelbrot_mpi_pth
+mandelbrot_mpi_omp
 
 measurements/
 
