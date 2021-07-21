@@ -6,6 +6,8 @@
 #include <math.h>
 #include <time.h>
 
+#define HOST 0
+
 double c_x_min;
 double c_x_max;
 double c_y_min;
@@ -67,29 +69,18 @@ void free_image_buffer() {
 }
 
 void init(int argc, char *argv[]){
-    if(argc < 6){
-        printf("usage: ./mandelbrot_seq c_x_min c_x_max c_y_min c_y_max image_size\n");
-        printf("examples with image_size = 11500:\n");
-        printf("    Full Picture:         ./mandelbrot_seq -2.5 1.5 -2.0 2.0 11500\n");
-        printf("    Seahorse Valley:      ./mandelbrot_seq -0.8 -0.7 0.05 0.15 11500\n");
-        printf("    Elephant Valley:      ./mandelbrot_seq 0.175 0.375 -0.1 0.1 11500\n");
-        printf("    Triple Spiral Valley: ./mandelbrot_seq -0.188 -0.012 0.554 0.754 11500\n");
-        exit(0);
-    }
-    else{
-        sscanf(argv[1], "%lf", &c_x_min);
-        sscanf(argv[2], "%lf", &c_x_max);
-        sscanf(argv[3], "%lf", &c_y_min);
-        sscanf(argv[4], "%lf", &c_y_max);
-        sscanf(argv[5], "%d", &image_size);
+    c_x_min = -0.188;
+    c_x_max = -0.012;
+    c_y_min = 0.554;
+    c_y_max = 0.754;
+    image_size = 4096;
 
-        i_x_max           = image_size;
-        i_y_max           = image_size;
-        image_buffer_size = image_size * image_size;
+    i_x_max           = image_size;
+    i_y_max           = image_size;
+    image_buffer_size = image_size * image_size;
 
-        pixel_width       = (c_x_max - c_x_min) / i_x_max;
-        pixel_height      = (c_y_max - c_y_min) / i_y_max;
-    };
+    pixel_width       = (c_x_max - c_x_min) / i_x_max;
+    pixel_height      = (c_y_max - c_y_min) / i_y_max;
 };
 
 void update_rgb_buffer(int iteration, int x, int y){
@@ -128,6 +119,39 @@ void write_to_file(){
     fclose(file);
 };
 
+void mpi_managment(int argc, char *argv[]){
+    int id, size, block, i_y;
+    unsigned char image_local[3];
+
+    MPI_Init(&argc, &argv);
+    MPI_Comm_rank(MPI_COMM_WORLD, &id);
+    MPI_Comm_size(MPI_COMM_WORLD, &size);
+    block = i_y_max/(size-1);
+    if (id == HOST) {
+        printf("\nHOST: Começando checagem\n");
+        for(int i = 1; i < size; i++){
+            for (int j = 0; j < image_buffer_size; j++) {
+                MPI_Recv(&image_local, 3, MPI_UNSIGNED_CHAR, i, 1, MPI_COMM_WORLD, NULL);
+                image_buffer[j][0] = image_local[0];
+                image_buffer[j][1] = image_local[1];
+                image_buffer[j][2] = image_local[2];
+            }
+        }
+    }
+    else{
+        i_y = block*(id-1);
+        for (int i = 0; i < image_buffer_size; i++) {
+            image_buffer[i][0]='e';
+            image_buffer[i][1]='t';
+            image_buffer[i][2]='v';
+            MPI_Send(image_buffer[i], 3, MPI_UNSIGNED_CHAR, HOST, 1, MPI_COMM_WORLD);
+        }
+        
+    }
+    
+    MPI_Finalize();
+}
+
 void compute_mandelbrot(){
     double z_x;
     double z_y;
@@ -142,7 +166,7 @@ void compute_mandelbrot(){
     double c_x;
     double c_y;
 
-    for(i_y = 0; i_y < i_y_max; i_y++){
+    for (i_y = 0; i_y < i_y_max; i_y++) {
         c_y = c_y_min + i_y * pixel_height;
 
         if(fabs(c_y) < pixel_height / 2){
@@ -181,7 +205,7 @@ int main(int argc, char *argv[]){
 
     double b = rtclock();
 
-    compute_mandelbrot();
+    mpi_managment(argc, argv);
 
     double c = rtclock();
 
@@ -190,6 +214,6 @@ int main(int argc, char *argv[]){
 
     double d = rtclock();
 
-    printf("%s,%d,%d,%lf,%lf", "seq", image_size, 1, 1e3*(c-b), 1e3*((b-a) + (d-c)));
+    // printf("%s,%d,%d,%lf,%lf", "seq", image_size, 1, 1e3*(c-b), 1e3*((b-a) + (d-c)));
     return 0;
 };

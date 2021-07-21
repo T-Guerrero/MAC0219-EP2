@@ -68,22 +68,17 @@ void free_image_buffer() {
 }
 
 void init(int argc, char *argv[]){
-    if(argc < 7){
-        printf("usage: ./mandelbrot_omp c_x_min c_x_max c_y_min c_y_max image_size num_threads\n");
-        printf("examples with image_size = 11500:\n");
-        printf("    Full Picture:         ./mandelbrot_omp -2.5 1.5 -2.0 2.0 11500 4\n");
-        printf("    Seahorse Valley:      ./mandelbrot_omp -0.8 -0.7 0.05 0.15 11500 4\n");
-        printf("    Elephant Valley:      ./mandelbrot_omp 0.175 0.375 -0.1 0.1 11500 4\n");
-        printf("    Triple Spiral Valley: ./mandelbrot_omp -0.188 -0.012 0.554 0.754 11500 4\n");
+    if(argc < 2){
+        printf("usage: ./mandelbrot_omp num_threads\n");
         exit(0);
     }
     else{
-        sscanf(argv[1], "%lf", &c_x_min);
-        sscanf(argv[2], "%lf", &c_x_max);
-        sscanf(argv[3], "%lf", &c_y_min);
-        sscanf(argv[4], "%lf", &c_y_max);
-        sscanf(argv[5], "%d", &image_size);
-        sscanf(argv[6], "%d", &threads);
+        c_x_min = -0.188;
+        c_x_max = -0.012;
+        c_y_min = 0.554;
+        c_y_max = 0.754;
+        image_size = 4096;
+        sscanf(argv[1], "%d", &threads);
 
         i_x_max           = image_size;
         i_y_max           = image_size;
