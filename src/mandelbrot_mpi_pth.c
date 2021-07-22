@@ -7,6 +7,12 @@
 #include <pthread.h>
 #include <time.h>
 
+#define HOST 0
+
+int id_mpi;
+int size_mpi;
+int chunk_mpi;
+
 int threads;
 double c_x_min;
 double c_x_max;
@@ -19,7 +25,7 @@ double pixel_height;
 int iteration_max = 200;
 
 int image_size;
-unsigned char **image_buffer;
+unsigned char *image_buffer;
 
 int i_x_max;
 int i_y_max;
@@ -49,6 +55,7 @@ int colors[17][3] = {
 typedef struct {
     int i_y_thread;
     int i_y_thread_max;
+    int current;
 } ThreadData;
 
 static double rtclock() {
@@ -58,24 +65,19 @@ static double rtclock() {
 }
 
 void allocate_image_buffer(){
-    int rgb_size = 3;
-    image_buffer = (unsigned char **) malloc(sizeof(unsigned char *) * image_buffer_size);
-
-    for(int i = 0; i < image_buffer_size; i++){
-        image_buffer[i] = (unsigned char *) malloc(sizeof(unsigned char) * rgb_size);
-    };
+    if (id_mpi == HOST)
+        image_buffer = (unsigned char *) malloc(sizeof(unsigned char) * image_buffer_size);
+    else
+        image_buffer = (unsigned char *) malloc(sizeof(unsigned char) * (chunk_mpi * i_x_max));
 };
 
 void free_image_buffer() {
-    for (int i  = 0; i < image_buffer_size; i++) {
-        free(image_buffer[i]);
-    }
     free(image_buffer);
 }
 
 void init(int argc, char *argv[]){
     if(argc < 2){
-        printf("usage: ./mandelbrot_pth num_threads\n");
+        printf("usage: mpirun -np <num_procs> mandelbrot_mpi_pth <num_threads>\n");
         exit(0);
     }
     else{
@@ -95,21 +97,24 @@ void init(int argc, char *argv[]){
     };
 };
 
-void update_rgb_buffer(int iteration, int x, int y){
+void set_rgb_from_buffer(FILE *file, int i){
     int color;
-
+    int iteration = image_buffer[i];
+    unsigned char rgb[3];
+    
     if(iteration == iteration_max){
-        image_buffer[(i_y_max * y) + x][0] = colors[gradient_size][0];
-        image_buffer[(i_y_max * y) + x][1] = colors[gradient_size][1];
-        image_buffer[(i_y_max * y) + x][2] = colors[gradient_size][2];
+        rgb[0] = colors[gradient_size][0];
+        rgb[1] = colors[gradient_size][1];
+        rgb[2] = colors[gradient_size][2];
     }
     else{
         color = iteration % gradient_size;
 
-        image_buffer[(i_y_max * y) + x][0] = colors[color][0];
-        image_buffer[(i_y_max * y) + x][1] = colors[color][1];
-        image_buffer[(i_y_max * y) + x][2] = colors[color][2];
+        rgb[0] = colors[color][0];
+        rgb[1] = colors[color][1];
+        rgb[2] = colors[color][2];
     };
+    fwrite(rgb, 1 , 3, file);
 };
 
 void write_to_file(){
@@ -125,7 +130,7 @@ void write_to_file(){
             i_x_max, i_y_max, max_color_component_value);
 
     for(int i = 0; i < image_buffer_size; i++){
-        fwrite(image_buffer[i], 1 , 3, file);
+        set_rgb_from_buffer(file, i);
     };
 
     fclose(file);
@@ -134,6 +139,7 @@ void write_to_file(){
 void * worker(void *argument) {
     ThreadData arg = *(ThreadData *)argument;
     int i_y = arg.i_y_thread;
+    int current = arg.current;
     int max = arg.i_y_thread_max;
     double z_x;
     double z_y;
@@ -173,25 +179,25 @@ void * worker(void *argument) {
                 z_x_squared = z_x * z_x;
                 z_y_squared = z_y * z_y;
             };
-
-            update_rgb_buffer(iteration, i_x, i_y);
+            image_buffer[(i_x_max * (i_y - current)) + i_x] = iteration;
         };
     };
     pthread_exit(NULL);
 }
 
-void compute_mandelbrot(){
+void compute_mandelbrot(int current){
     pthread_t *tids = malloc(sizeof(pthread_t) * threads);
     ThreadData *args = malloc(sizeof(ThreadData) * threads);
     int error;
-    int size = i_y_max/threads;
-    int i_y = 0;
+    int size = chunk_mpi/threads;
+    int i_y = current;
     for (int i = 0; i < threads; i++) {
+        args[i].current = current;
         args[i].i_y_thread = i_y;
         i_y += size;
 
         if (i == threads - 1)
-            args[i].i_y_thread_max = i_y_max;
+            args[i].i_y_thread_max = current+chunk_mpi;
         else
             args[i].i_y_thread_max = i_y;
 
@@ -199,7 +205,6 @@ void compute_mandelbrot(){
         if (error)
             printf(">> Error creating thread\n");
     }
-
     for (int i = 0; i < threads; i++) {
         error = pthread_join(tids[i], NULL);
         if (error)
@@ -210,17 +215,29 @@ void compute_mandelbrot(){
     free(args);
 };
 
+void mpi_managment(){
+    int i_y;
+    i_y = chunk_mpi*id_mpi;
+    compute_mandelbrot(i_y);
+    MPI_Gather(image_buffer, chunk_mpi*i_x_max, MPI_UNSIGNED_CHAR,
+             image_buffer, chunk_mpi*i_x_max, MPI_UNSIGNED_CHAR, HOST, MPI_COMM_WORLD);
+    MPI_Finalize();
+}
+
 int main(int argc, char *argv[]){
-    init(argc, argv);
-
-    allocate_image_buffer();
-
     double a = rtclock();
-    compute_mandelbrot();
-    double b = rtclock();
 
-    write_to_file();
+    init(argc, argv);
+    MPI_Init(&argc, &argv);
+    MPI_Comm_rank(MPI_COMM_WORLD, &id_mpi);
+    MPI_Comm_size(MPI_COMM_WORLD, &size_mpi);
+    chunk_mpi = i_y_max/(size_mpi);
+    allocate_image_buffer();
+    mpi_managment();
+    if (id_mpi == HOST)
+        write_to_file();
+
     free_image_buffer();
-    printf("%s,%d,%d,%lf,0", "pth", image_size, threads, 1e3*(b-a));
+    double d = rtclock();
     return 0;
 };
