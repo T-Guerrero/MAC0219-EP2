@@ -8,6 +8,10 @@
 
 #define HOST 0
 
+int id_mpi;
+int size_mpi;
+int chunk_mpi;
+
 double c_x_min;
 double c_x_max;
 double c_y_min;
@@ -19,7 +23,7 @@ double pixel_height;
 int iteration_max = 200;
 
 int image_size;
-unsigned char **image_buffer;
+unsigned char *image_buffer;
 
 int i_x_max;
 int i_y_max;
@@ -53,18 +57,13 @@ static double rtclock() {
 }
 
 void allocate_image_buffer(){
-    int rgb_size = 3;
-    image_buffer = (unsigned char **) malloc(sizeof(unsigned char *) * image_buffer_size);
-
-    for(int i = 0; i < image_buffer_size; i++){
-        image_buffer[i] = (unsigned char *) malloc(sizeof(unsigned char) * rgb_size);
-    };
+    if (id_mpi == HOST)
+        image_buffer = (unsigned char *) malloc(sizeof(unsigned char) * image_buffer_size);
+    else
+        image_buffer = (unsigned char *) malloc(sizeof(unsigned char) * (chunk_mpi * i_x_max));
 };
 
 void free_image_buffer() {
-    for (int i  = 0; i < image_buffer_size; i++) {
-        free(image_buffer[i]);
-    }
     free(image_buffer);
 }
 
@@ -83,21 +82,24 @@ void init(int argc, char *argv[]){
     pixel_height      = (c_y_max - c_y_min) / i_y_max;
 };
 
-void update_rgb_buffer(int iteration, int x, int y){
+void set_rgb_from_buffer(FILE *file, int i){
     int color;
-
+    int iteration = image_buffer[i];
+    unsigned char rgb[3];
+    
     if(iteration == iteration_max){
-        image_buffer[(i_y_max * y) + x][0] = colors[gradient_size][0];
-        image_buffer[(i_y_max * y) + x][1] = colors[gradient_size][1];
-        image_buffer[(i_y_max * y) + x][2] = colors[gradient_size][2];
+        rgb[0] = colors[gradient_size][0];
+        rgb[1] = colors[gradient_size][1];
+        rgb[2] = colors[gradient_size][2];
     }
     else{
         color = iteration % gradient_size;
 
-        image_buffer[(i_y_max * y) + x][0] = colors[color][0];
-        image_buffer[(i_y_max * y) + x][1] = colors[color][1];
-        image_buffer[(i_y_max * y) + x][2] = colors[color][2];
+        rgb[0] = colors[color][0];
+        rgb[1] = colors[color][1];
+        rgb[2] = colors[color][2];
     };
+    fwrite(rgb, 1 , 3, file);
 };
 
 void write_to_file(){
@@ -113,46 +115,13 @@ void write_to_file(){
             i_x_max, i_y_max, max_color_component_value);
 
     for(int i = 0; i < image_buffer_size; i++){
-        fwrite(image_buffer[i], 1 , 3, file);
+        set_rgb_from_buffer(file, i);
     };
 
     fclose(file);
 };
 
-void mpi_managment(int argc, char *argv[]){
-    int id, size, block, i_y;
-    unsigned char image_local[3];
-
-    MPI_Init(&argc, &argv);
-    MPI_Comm_rank(MPI_COMM_WORLD, &id);
-    MPI_Comm_size(MPI_COMM_WORLD, &size);
-    block = i_y_max/(size-1);
-    if (id == HOST) {
-        printf("\nHOST: Começando checagem\n");
-        for(int i = 1; i < size; i++){
-            for (int j = 0; j < image_buffer_size; j++) {
-                MPI_Recv(&image_local, 3, MPI_UNSIGNED_CHAR, i, 1, MPI_COMM_WORLD, NULL);
-                image_buffer[j][0] = image_local[0];
-                image_buffer[j][1] = image_local[1];
-                image_buffer[j][2] = image_local[2];
-            }
-        }
-    }
-    else{
-        i_y = block*(id-1);
-        for (int i = 0; i < image_buffer_size; i++) {
-            image_buffer[i][0]='e';
-            image_buffer[i][1]='t';
-            image_buffer[i][2]='v';
-            MPI_Send(image_buffer[i], 3, MPI_UNSIGNED_CHAR, HOST, 1, MPI_COMM_WORLD);
-        }
-        
-    }
-    
-    MPI_Finalize();
-}
-
-void compute_mandelbrot(){
+void compute_mandelbrot(int current){
     double z_x;
     double z_y;
     double z_x_squared;
@@ -161,12 +130,11 @@ void compute_mandelbrot(){
 
     int iteration;
     int i_x;
-    int i_y;
 
     double c_x;
     double c_y;
 
-    for (i_y = 0; i_y < i_y_max; i_y++) {
+    for (int i = 0, i_y = current; i_y < current + chunk_mpi; i_y++, i++) {
         c_y = c_y_min + i_y * pixel_height;
 
         if(fabs(c_y) < pixel_height / 2){
@@ -190,30 +158,36 @@ void compute_mandelbrot(){
 
                 z_x_squared = z_x * z_x;
                 z_y_squared = z_y * z_y;
-            };
+            }
+            image_buffer[(i_x_max * i) + i_x] = iteration;
+        }
+    }
+}
 
-            update_rgb_buffer(iteration, i_x, i_y);
-        };
-    };
-};
+void mpi_managment(){
+    int i_y;
+    i_y = chunk_mpi*id_mpi;
+    compute_mandelbrot(i_y);
+    MPI_Gather(image_buffer, chunk_mpi*i_x_max, MPI_UNSIGNED_CHAR,
+             image_buffer, chunk_mpi*i_x_max, MPI_UNSIGNED_CHAR, HOST, MPI_COMM_WORLD);
+    MPI_Finalize();
+}
 
 int main(int argc, char *argv[]){
     double a = rtclock();
 
     init(argc, argv);
+    MPI_Init(&argc, &argv);
+    MPI_Comm_rank(MPI_COMM_WORLD, &id_mpi);
+    MPI_Comm_size(MPI_COMM_WORLD, &size_mpi);
+    chunk_mpi = i_y_max/(size_mpi);
+
     allocate_image_buffer();
+    mpi_managment();
+    if (id_mpi == HOST)
+        write_to_file();
 
-    double b = rtclock();
-
-    mpi_managment(argc, argv);
-
-    double c = rtclock();
-
-    write_to_file();
     free_image_buffer();
-
     double d = rtclock();
-
-    // printf("%s,%d,%d,%lf,%lf", "seq", image_size, 1, 1e3*(c-b), 1e3*((b-a) + (d-c)));
     return 0;
 };
