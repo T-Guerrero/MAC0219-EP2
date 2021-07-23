@@ -82,7 +82,7 @@ void init(int argc, char *argv[]){
         c_x_max = -0.012;
         c_y_min = 0.554;
         c_y_max = 0.754;
-        image_size = 100;
+        image_size = 4096;
         sscanf(argv[1], "%d", &threads);
 
         i_x_max           = image_size;
