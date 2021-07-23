@@ -79,7 +79,7 @@ void init(int argc, char *argv[]){
         c_x_max = -0.012;
         c_y_min = 0.554;
         c_y_max = 0.754;
-        image_size = 4096;
+        image_size = 100;
         sscanf(argv[1], "%d", &threads);
 
         i_x_max           = image_size;
@@ -189,8 +189,6 @@ void mpi_managment(){
 }
 
 int main(int argc, char *argv[]){
-    double a = rtclock();
-
     init(argc, argv);
     MPI_Init(&argc, &argv);
     MPI_Comm_rank(MPI_COMM_WORLD, &id_mpi);
@@ -198,11 +196,17 @@ int main(int argc, char *argv[]){
     chunk_mpi = i_y_max/(size_mpi);
 
     allocate_image_buffer();
+
+    double a = rtclock();
     mpi_managment();
+    double b = rtclock();
+
     if (id_mpi == HOST)
         write_to_file();
 
     free_image_buffer();
-    double d = rtclock();
+    
+    if (id_mpi == HOST)
+        printf("mpi_omp,%d,%d,%lf\n", size_mpi, threads, 1e3*(b-a));
     return 0;
 };

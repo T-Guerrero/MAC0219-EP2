@@ -2,51 +2,43 @@
 
 set -o xtrace
 
-MEASUREMENTS=20
+MEASUREMENTS=15
 
-ITERATIONS_SIZE=10
-ITERATIONS_THREADS=5
+ITERATIONS_PROCS=5
+ITERATIONS_THREADS=6
 
-INITIAL_SIZE=16
-SIZE=$INITIAL_SIZE
+#1:*2:16
+INITIAL_PROCS=1
+PROCS=$INITIAL_PROCS
 
+#1:*2:32
 INITIAL_THREADS=1
 THREADS=$INITIAL_THREADS
 
-NAMES=('mandelbrot_seq' 'mandelbrot_pth' 'mandelbrot_omp')
+NAMES=('mandelbrot_mpi' 'mandelbrot_mpi_pth' 'mandelbrot_mpi_omp')
 
 make
 mkdir -p ../measurements
-echo "tipo,tamanho,threads,tempo,io,figura" > ../measurements/data.csv
+echo "tipo,processos,threads,tempo" > ../measurements/data.csv
 
 for NAME in ${NAMES[@]}; do
 
-    for ((j=0; j<=$ITERATIONS_THREADS; j++)); do
+    for ((j=0; j<$ITERATIONS_PROCS; j++)); do
 
-        for ((i=1; i<=$ITERATIONS_SIZE; i++)); do
+        for ((i=0; i<$ITERATIONS_THREADS; i++)); do
             for k in $(seq $MEASUREMENTS); do
-                { ./$NAME -2.5 1.5 -2.0 2.0 $SIZE $THREADS; echo ",full"; } >> ../measurements/data.csv
+                { mpirun -np $PROCS $NAME $THREADS; } >> ../measurements/data.csv
             done
-            for k in $(seq $MEASUREMENTS); do
-                { ./$NAME -0.8 -0.7 0.05 0.15 $SIZE $THREADS; echo ",seahorseValley"; } >> ../measurements/data.csv
-            done
-            for k in $(seq $MEASUREMENTS); do
-                { ./$NAME 0.175 0.375 -0.1 0.1 $SIZE $THREADS; echo ",elephantValley"; } >> ../measurements/data.csv
-            done
-            for k in $(seq $MEASUREMENTS); do
-                { ./$NAME -0.188 -0.012 0.554 0.754 $SIZE $THREADS; echo ",tripleSpiralValley"; } >> ../measurements/data.csv
-            done
-            SIZE=$(($SIZE * 2))
+
+            THREADS=$(($THREADS * 2))
             rm -f output.ppm
+
+            if [ $NAME == 'mandelbrot_mpi' ] ; then
+                break;
+            fi
         done
-
-        THREADS=$(($THREADS * 2))
-        SIZE=$INITIAL_SIZE
-
-        if [ $NAME == 'mandelbrot_seq' ] ; then
-            break;
-        fi
+        THREADS=$INITIAL_THREADS
+        PROCS=$(($PROCS * 2))
     done
-
-    THREADS=$INITIAL_THREADS
+    PROCS=$INITIAL_PROCS
 done

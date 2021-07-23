@@ -70,7 +70,7 @@ void init(int argc, char *argv[]){
     c_x_max = -0.012;
     c_y_min = 0.554;
     c_y_max = 0.754;
-    image_size = 4096;
+    image_size = 100;
 
     i_x_max           = image_size;
     i_y_max           = image_size;
@@ -162,22 +162,16 @@ void compute_mandelbrot(){
 };
 
 int main(int argc, char *argv[]){
-    double a = rtclock();
-
     init(argc, argv);
     allocate_image_buffer();
 
-    double b = rtclock();
-
+    double a = rtclock();
     compute_mandelbrot();
-
-    double c = rtclock();
+    double b = rtclock();
 
     write_to_file();
     free_image_buffer();
 
-    double d = rtclock();
-
-    printf("%s,%d,%d,%lf,%lf", "seq", image_size, 1, 1e3*(c-b), 1e3*((b-a) + (d-c)));
+    printf("seq,1,1,%lf", 1e3*(b-a));
     return 0;
 };
