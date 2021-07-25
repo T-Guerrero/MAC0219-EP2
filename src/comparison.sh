@@ -4,8 +4,9 @@ set -o xtrace
 
 make
 MEASUREMENTS=15
-THREADS=4
-PROCS=1
+MPI_SEQ_PROCS=16
+MPI_THRD_PROCS=4
+THREADS=8
 
 MPI_FLAG=0
 
@@ -15,18 +16,22 @@ echo "tipo,processos,threads,tempo" > ../measurements/comparison.csv
 
 for NAME in ${NAMES[@]}; do
 
-    if [ $MPI_FLAG -eq 1 ] ; then
+    if [ $NAME == 'mandelbrot_mpi' ] ; then
         for k in $(seq $MEASUREMENTS); do
-            mpirun -np $PROCS $NAME $THREADS >> ../measurements/comparison.csv
+            mpirun -np $MPI_SEQ_PROCS $NAME >> ../measurements/comparison.csv
         done
-    elif
+        MPI_FLAG=1
+
+    elif [ $MPI_FLAG -eq 1 ] ; then
+        for k in $(seq $MEASUREMENTS); do
+            mpirun -np $MPI_THRD_PROCS $NAME $THREADS >> ../measurements/comparison.csv
+        done
+
+    else
         for k in $(seq $MEASUREMENTS); do
             ./$NAME $THREADS >> ../measurements/comparison.csv
         done
     fi
 
-    if [ $NAME == 'mandelbrot_omp' ] ; then
-        MPI_FLAG=1
-    fi
     rm -f output.ppm
 done

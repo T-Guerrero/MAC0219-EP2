@@ -172,6 +172,6 @@ int main(int argc, char *argv[]){
     write_to_file();
     free_image_buffer();
 
-    printf("seq,1,1,%lf", 1e3*(b-a));
+    printf("seq,1,1,%lf\n", 1e3*(b-a));
     return 0;
 };

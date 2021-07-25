@@ -220,6 +220,6 @@ int main(int argc, char *argv[]){
 
     write_to_file();
     free_image_buffer();
-    printf("pth,1,%d,%lf", threads, 1e3*(b-a));
+    printf("pth,1,%d,%lf\n", threads, 1e3*(b-a));
     return 0;
 };

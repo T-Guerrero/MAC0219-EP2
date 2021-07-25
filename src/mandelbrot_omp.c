@@ -186,6 +186,6 @@ int main(int argc, char *argv[]){
 
     write_to_file();
     free_image_buffer();
-    printf("omp,1,%d,%lf", threads, 1e3*(b-a));
+    printf("omp,1,%d,%lf\n", threads, 1e3*(b-a));
     return 0;
 };
